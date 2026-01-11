@@ -1,5 +1,5 @@
 import { customProvider } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from '@ai-sdk/openai';
 import { isTestEnvironment } from '../constants';
 import { chatModel, titleModel } from './models.test';
 
@@ -12,7 +12,7 @@ export const myProvider = isTestEnvironment
     })
   : customProvider({
       languageModels: {
-        'chat-model': anthropic('claude-4-sonnet-20250514'),
-        'title-model': anthropic('claude-3-5-haiku-latest'),
+        'chat-model': openai('gpt-4o'),
+        'title-model': openai('gpt-3.5-turbo'),
       },
     });
