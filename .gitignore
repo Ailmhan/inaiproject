@@ -46,3 +46,14 @@ yarn-error.log*
 tsconfig.tsbuildinfo
 docs/composio-toolkit-metadata.md
 .vercel
+
+# PWA files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+
+# Capacitor
+ios/
+android/
+# capacitor.config.json и capacitor.config.ts должны быть в репозитории

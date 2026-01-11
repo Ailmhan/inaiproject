@@ -1,0 +1,144 @@
+workflows:
+  ios-workflow:
+    name: iOS Workflow
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - app_store_credentials # Добавьте ваши App Store credentials в Codemagic
+      vars:
+        APP_ID: "com.inaiproject.chat" # Bundle ID для InAI Chat
+        PWA_URL: "https://inaiproject.vercel.app" # URL опубликованного приложения
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        APP_STORE_ID: "" # Ваш App Store ID (если уже опубликовано)
+      node: 22.0.0  # Capacitor CLI требует Node.js >= 22.0.0
+      pnpm_version: 9.12.3
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm@$PNPM_VERSION
+      - name: Install dependencies
+        script: |
+          pnpm install --frozen-lockfile
+          
+          # Убеждаемся, что Capacitor установлен
+          if ! grep -q "@capacitor/cli" package.json; then
+            echo "Installing Capacitor..."
+            pnpm add -D @capacitor/cli @capacitor/core @capacitor/ios
+          fi
+      - name: Setup environment variables
+        script: |
+          # Создаем .env.local для сборки (если нужны переменные окружения)
+          # ВАЖНО: Добавьте необходимые переменные в Codemagic Environment Variables
+          echo "Setting up environment variables..."
+      - name: Run database migrations (skip if not needed)
+        script: |
+          # Пропускаем миграции, так как они требуют подключения к БД
+          # Если нужны миграции, настройте переменные окружения в Codemagic
+          echo "Skipping database migrations in CI"
+      - name: Build Next.js application
+        script: |
+          # Собираем Next.js приложение
+          # Для Capacitor нужен статический экспорт или standalone режим
+          # Устанавливаем переменную окружения для production сборки
+          export NODE_ENV=production
+          pnpm build
+          
+          # Проверяем, что сборка прошла успешно
+          if [ ! -d ".next" ]; then
+            echo "Error: Next.js build failed - .next directory not found"
+            exit 1
+          fi
+          echo "Next.js build completed successfully"
+      - name: Initialize Capacitor (if not initialized)
+        script: |
+          if [ ! -f "capacitor.config.ts" ] && [ ! -f "capacitor.config.json" ]; then
+            echo "Initializing Capacitor..."
+            npx cap init "InAI Chat" "$APP_ID" --web-dir=".next"
+          else
+            echo "Capacitor already initialized"
+            # Обновляем конфигурацию с правильным URL
+            if [ -f "capacitor.config.ts" ]; then
+              sed -i.bak "s|url:.*|url: '$PWA_URL',|g" capacitor.config.ts || true
+            fi
+          fi
+      - name: Add iOS platform (if not added)
+        script: |
+          if [ ! -d "ios" ]; then
+            echo "Adding iOS platform..."
+            npx cap add ios
+          fi
+      - name: Sync Capacitor
+        script: |
+          echo "Syncing Capacitor with iOS..."
+          npx cap sync ios
+          
+          # Проверяем, что iOS проект создан
+          if [ ! -f "$XCODE_WORKSPACE" ]; then
+            echo "Error: Xcode workspace not found at $XCODE_WORKSPACE"
+            echo "Please ensure Capacitor is properly initialized and iOS platform is added"
+            exit 1
+          fi
+          echo "Capacitor sync completed successfully"
+      - name: Set up code signing settings on Xcode project
+        script: |
+          # Настройка подписи кода через Codemagic
+          xcode-project use-profiles
+          
+          # Альтернативно, можно использовать автоматическую подпись
+          # xcode-project use-automatic-code-signing \
+          #   --workspace "$XCODE_WORKSPACE" \
+          #   --scheme "$XCODE_SCHEME" \
+          #   --team-id "$APP_STORE_CONNECT_TEAM_ID"
+      - name: Build iOS app
+        script: |
+          xcodebuild build \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Build IPA
+        script: |
+          xcodebuild archive \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            | xcpretty
+      - name: Export IPA
+        script: |
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/archive/App.xcarchive" \
+            -exportOptionsPlist export_options.plist \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+    publishing:
+      email:
+        recipients:
+          - user@example.com # Измените на ваш email
+        notify:
+          success: true
+          failure: false
+      app_store_connect:
+        # Автоматическая публикация в App Store Connect
+        auth: integration
+        
+        # Подготовка к публикации (не публикует автоматически)
+        submit_to_testflight: false
+        
+        # Или автоматическая публикация в TestFlight
+        # submit_to_testflight: true
+        # beta_groups:
+        #   - group name 1
+        #   - group name 2
