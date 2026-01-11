@@ -237,7 +237,10 @@ export async function POST(request: Request) {
     }
     // Handle unexpected errors
     console.error('Unexpected error in POST handler:', error);
-    return new ChatSDKError('internal_server_error:chat').toResponse();
+    return Response.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 

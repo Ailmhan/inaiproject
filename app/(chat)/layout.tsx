@@ -6,8 +6,6 @@ import { ToolBar, ToolbarProvider, ToolbarRail } from '@/components/toolbar';
 import { auth } from '../(auth)/auth';
 import Script from 'next/script';
 
-export const experimental_ppr = true;
-
 export default async function Layout({
   children,
 }: {
